@@ -1,35 +1,41 @@
 package com.example.servicedemo;
 
-import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
-import android.location.Criteria;
-import android.location.Location;
-import android.location.LocationManager;
-import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.RemoteException;
 import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-public class HelloService extends Service {
+import org.altbeacon.beacon.Beacon;
+import org.altbeacon.beacon.BeaconConsumer;
+import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
+import org.altbeacon.beacon.Identifier;
+import org.altbeacon.beacon.MonitorNotifier;
+import org.altbeacon.beacon.RangeNotifier;
+import org.altbeacon.beacon.Region;
+
+import java.util.Collection;
+
+public class HelloService extends Service implements BeaconConsumer, RangeNotifier {
     private static final String TAG = "HelloService";
     private static final String CHANNEL_ID = "11111";
     private static final String CHANNEL_NAME = "ForegroundServiceChannel";
-    private static final int DELAY_TIME = 5000;
+    private static final int DELAY_TIME = 10000;
 
-    BluetoothAdapter bluetoothAdapter;
+    private BluetoothAdapter bluetoothAdapter;
+    private BeaconManager beaconManager;
 
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
@@ -74,6 +80,10 @@ public class HelloService extends Service {
         Log.i(TAG, "onStartCommand");
         Toast.makeText(this, "Service Started", Toast.LENGTH_LONG).show();
 
+        beaconManager = BeaconManager.getInstanceForApplication(getApplicationContext());
+        beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(BeaconParser.EDDYSTONE_UID_LAYOUT));
+        beaconManager.bind(this);
+
         final Handler handler = new Handler();
         handler.postDelayed(new Runnable() {
             private long time = 0;
@@ -104,6 +114,7 @@ public class HelloService extends Service {
         Log.i(TAG, "onDestroy");
         Toast.makeText(this, "Service Destroyed", Toast.LENGTH_LONG).show();
         unregisterReceiver(broadcastReceiver);
+        beaconManager.unbind(this);
     }
 
     private void enableBluetooth() {
@@ -117,5 +128,30 @@ public class HelloService extends Service {
 
         IntentFilter intentFilter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         registerReceiver(broadcastReceiver, intentFilter);
+    }
+
+
+    @Override
+    public void onBeaconServiceConnect() {
+        Region region = new Region("all-beacons-region", null, null, null);
+        try {
+            beaconManager.startRangingBeaconsInRegion(region);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        beaconManager.addRangeNotifier(this);
+    }
+
+    @Override
+    public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
+        for (Beacon beacon : beacons) {
+            if (beacon.getServiceUuid() == 0xfeaa && beacon.getBeaconTypeCode() == 0x00) {
+                Identifier namespaceId = beacon.getId1();
+                Identifier instanceId = beacon.getId2();
+                Log.d(TAG, "I see a beacon transmitting namespace id: " + namespaceId +
+                        " and instance id: " + instanceId +
+                        " approximately " + beacon.getDistance() + " meters away.");
+            }
+        }
     }
 }
