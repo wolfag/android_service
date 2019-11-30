@@ -16,6 +16,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
 
 import org.altbeacon.beacon.Beacon;
 import org.altbeacon.beacon.BeaconConsumer;
@@ -151,7 +152,26 @@ public class HelloService extends Service implements BeaconConsumer, RangeNotifi
                 Log.d(TAG, "I see a beacon transmitting namespace id: " + namespaceId +
                         " and instance id: " + instanceId +
                         " approximately " + beacon.getDistance() + " meters away.");
+                showNotification(getNotification(beacon.getId1() + ""));
             }
         }
+    }
+
+    private Notification getNotification(String content) {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID);
+        builder.setContentTitle("");
+        builder.setContentText(content);
+        builder.setSmallIcon(R.drawable.ic_launcher_foreground);
+        builder.setAutoCancel(true);
+        return builder.build();
+    }
+
+    private void showNotification(Notification notification) {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
+            manager.createNotificationChannel(channel);
+        }
+        manager.notify(1, notification);
     }
 }
